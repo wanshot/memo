@@ -13,7 +13,7 @@ LOGAPPNAME = 'memo'
 
 
 def get_argparser():
-    from rapidfire import __version__, __logo__
+    from memo import __version__, __logo__
 
     parser = argparse.ArgumentParser(
         usage='memo',
