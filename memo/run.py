@@ -9,7 +9,7 @@ from .ansi import term
 from .config import Config, make_memo_config
 from .core import Memo
 
-LOGAPPNAME = 'memo'
+LOGAPPNAME = 'simple memo tool'
 
 
 def get_argparser():
@@ -28,19 +28,21 @@ def get_argparser():
                         action='version',
                         version='{version}'.format(version=__version__))
 
-    parser.add_argument('filename',
-                        nargs='?',
-                        type=str)
+    subparsers = parser.add_subparsers(dest='subparser_name', help='sub memo command')
 
-    parser.add_argument('-l', '--list',
-                        action='store_true',
-                        default=False,
-                        help='show memo list')
+    parser_new = subparsers.add_parser('new', help='open new file')
+    parser_new.add_argument('-e', '--extension',
+                            nargs='?',
+                            default='rst',
+                            help='set memo file extension')
 
-    parser.add_argument('-i', '--init',
-                        action='store_true',
-                        default=False,
-                        help='init memo')
+    parser_grep = subparsers.add_parser('grep', help='grep memo files')
+    parser_grep.add_argument('pattern', help='grep pattern')
+
+    subparsers.add_parser('list', help='show memo files')
+
+    subparsers.add_parser('init', help='init memo')
+
     return parser
 
 
@@ -53,18 +55,27 @@ def get_locale():
 def main():
     parser = get_argparser()
     args = parser.parse_args()
-    if args.init:
+    if args.subparser_name == 'init':
         make_memo_config()
-    elif args.filename:
+    elif args.subparser_name == 'new':
         config = Config()
+        filename = input('filename: ')
         now = datetime.datetime.now()
-        formated = '{}/{:%Y-%m-%d}_{}.rst'.format(config.memodir,
-                                                  now,
-                                                  args.filename)
+        formated = '{}/{:%Y-%m-%d}_{}.{}'.format(config.memodir,
+                                                 now,
+                                                 filename,
+                                                 args.extension)
         subprocess.run([config.editor, formated])
-    elif args.list:
+    elif args.subparser_name == 'list':
         config = Config()
         encoding = get_locale()
         with Memo(config.memodir, encoding) as memo:
-            exit_code = memo.choice_file()
+            exit_code = memo.loop()
+        sys.exit(exit_code)
+    elif args.subparser_name == 'grep':
+        config = Config()
+        encoding = get_locale()
+        with Memo(config.memodir, encoding, pattern=args.pattern) as memo:
+            memo.grep()
+            exit_code = memo.loop()
         sys.exit(exit_code)

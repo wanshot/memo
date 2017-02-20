@@ -4,7 +4,6 @@ import termios
 import tty
 import subprocess
 import glob
-from collections import OrderedDict
 
 from wcwidth import wcwidth
 
@@ -15,12 +14,14 @@ from .config import Config
 
 class Memo(object):
 
-    def __init__(self, memodir, output_encodeing, input_encoding='utf-8', kwargs=None):
+    def __init__(self, memodir, output_encodeing, input_encoding='utf-8', pattern=None):
         self.width, self.height = get_terminal_size()
-        self.file2path = self.get_memodir_files(memodir)
-        self.file_count = len(self.file2path.keys())
+        self.memodir = memodir
+        self.lines = self.get_memodir_files(memodir)
+        self.file_count = len(self.lines)
         self.output_encodeing = output_encodeing
         self.input_encoding = input_encoding
+        self.pattern = pattern
 
     def __enter__(self):
         self.pos = 1
@@ -39,7 +40,7 @@ class Memo(object):
         elif self.filename:
             subprocess.call([self.config.editor, self.filename])
 
-    def choice_file(self):
+    def loop(self):
         self.render()
         while True:
             try:
@@ -55,7 +56,7 @@ class Memo(object):
                     if self.pos < self.file_count:
                         self.pos += 1
                 elif ch == '\n':
-                    self.filename = self.file2path[list(self.file2path.keys())[self.pos - 1]]
+                    self.filename = self.lines[self.pos - 1][1]
                     break
                 self.render()
             except:
@@ -66,7 +67,7 @@ class Memo(object):
         reset = '\x1b[0K\x1b[0m'
         sys.stdout.write('\x1b[?25l')  # hide cursor
 
-        for idx, filename in enumerate(self.file2path.keys(), start=1):
+        for idx, (filename, _) in enumerate(self.lines, start=1):
             sys.stdout.write('\x1b[0K')
             eol = '' if self.file_count == idx else '\n'
 
@@ -95,10 +96,26 @@ class Memo(object):
         return ''.join(string)
 
     def get_memodir_files(self, memodir):
-        name2path = OrderedDict()
+        name2path = []
         for ap in glob.glob('{}/*'.format(memodir)):
-            name2path[ap.split('/')[-1]] = ap
+            name2path.append((ap.split('/')[-1], ap))
         return name2path
+
+    def grep(self):
+        p = subprocess.Popen(
+            'grep -nH {} {}/*'.format(self.pattern, self.memodir),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True)
+        (output, err) = p.communicate()
+        if err:
+            sys.stdout.write(err.decode(self.output_encodeing))
+            sys.exit()
+        if not output:  # Not match
+            sys.exit()
+        stream = output.decode(self.output_encodeing)
+        self.lines = [(s, s.split(':')[0]) for s in stream.split('\n')]
+        self.file_count = len(self.lines)
 
 
 def get_ttyname():
